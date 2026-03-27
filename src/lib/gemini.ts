@@ -1,16 +1,36 @@
 import { GoogleGenAI } from "@google/genai";
+import { db } from "./firebase";
+import { doc, getDoc } from "firebase/firestore";
 
-const getAI = () => {
+let cachedGlobalKey: string | null = null;
+
+const getGlobalApiKey = async () => {
+  if (cachedGlobalKey) return cachedGlobalKey;
+  try {
+    const settingsDoc = await getDoc(doc(db, 'settings', 'global'));
+    if (settingsDoc.exists()) {
+      cachedGlobalKey = settingsDoc.data().gemini_api_key || null;
+      return cachedGlobalKey;
+    }
+  } catch (error) {
+    console.error("Error fetching global API key:", error);
+  }
+  return null;
+};
+
+const getAI = async () => {
   const customKey = localStorage.getItem('gemini_api_key');
   const envKey = process.env.GEMINI_API_KEY;
-  const apiKey = customKey || envKey || "";
+  const globalKey = await getGlobalApiKey();
+  
+  const apiKey = customKey || envKey || globalKey || "";
   return apiKey ? new GoogleGenAI({ apiKey }) : null;
 };
 
 export async function* generateAnswerStream(prompt: string, context: string, scholarInfo: string) {
-  const ai = getAI();
+  const ai = await getAI();
   if (!ai) {
-    yield "Assalamu Alaikum! I am your DeenAI assistant. Based on the scholarly knowledge in our database, it is highly recommended to follow the teachings of Ahl-e-Sunnat scholars. For specific Fiqh matters, always consult with a qualified local Mufti. \n\n(Note: Live AI responses are currently disabled. Please provide a Gemini API key in the Settings to enable full AI functionality.)";
+    yield "Assalamu Alaikum! I am your DeenAI assistant. Based on the scholarly knowledge in our database, it is highly recommended to follow the teachings of Ahl-e-Sunnat scholars. For specific Fiqh matters, always consult with a qualified local Mufti. \n\n(Note: Live AI responses are currently disabled. Please contact the administrator to enable full AI functionality.)";
     return;
   }
 
@@ -58,9 +78,9 @@ export async function* generateAnswerStream(prompt: string, context: string, sch
 }
 
 export async function generateAnswer(prompt: string, context: string, scholarInfo: string) {
-  const ai = getAI();
+  const ai = await getAI();
   if (!ai) {
-    return "Assalamu Alaikum! I am your DeenAI assistant. Based on the scholarly knowledge in our database, it is highly recommended to follow the teachings of Ahl-e-Sunnat scholars. For specific Fiqh matters, always consult with a qualified local Mufti. \n\n(Note: Live AI responses are currently disabled. Please provide a Gemini API key in the Settings to enable full AI functionality.)";
+    return "Assalamu Alaikum! I am your DeenAI assistant. Based on the scholarly knowledge in our database, it is highly recommended to follow the teachings of Ahl-e-Sunnat scholars. For specific Fiqh matters, always consult with a qualified local Mufti. \n\n(Note: Live AI responses are currently disabled. Please contact the administrator to enable full AI functionality.)";
   }
 
   try {
@@ -103,7 +123,7 @@ export async function generateAnswer(prompt: string, context: string, scholarInf
 }
 
 export async function generateNotes(content: string, format: 'bullet' | 'detailed' | 'summary') {
-  const ai = getAI();
+  const ai = await getAI();
   if (!ai) {
     const summary = content.length > 100 ? content.substring(0, 100) + "..." : content;
     if (format === 'summary') {

@@ -24,7 +24,7 @@ export default function Layout({ children, activeTab, setActiveTab, user, onNewC
     { id: 'notes', label: 'Bookmarks', icon: Bookmark, protected: true },
     { id: 'scholars', label: 'Scholars', icon: Users },
     { id: 'admin', label: 'Admin', icon: Settings, adminOnly: true },
-    { id: 'settings', label: 'Settings', icon: Cog },
+    { id: 'settings', label: 'Settings', icon: Cog, adminOnly: true },
   ];
 
   const isAdmin = user?.email === 'imranabdul700@gmail.com';

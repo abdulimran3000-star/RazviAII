@@ -1,23 +1,47 @@
 import React, { useState, useEffect } from 'react';
-import { Key, Save, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Key, Save, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 export default function Settings() {
   const [apiKey, setApiKey] = useState('');
+  const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null);
 
   useEffect(() => {
-    const savedKey = localStorage.getItem('gemini_api_key');
-    if (savedKey) setApiKey(savedKey);
+    const fetchGlobalSettings = async () => {
+      try {
+        const settingsDoc = await getDoc(doc(db, 'settings', 'global'));
+        if (settingsDoc.exists()) {
+          setApiKey(settingsDoc.data().gemini_api_key || '');
+        }
+      } catch (error) {
+        console.error("Error fetching global settings:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchGlobalSettings();
   }, []);
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
     try {
-      localStorage.setItem('gemini_api_key', apiKey);
-      setStatus({ type: 'success', message: 'API Key saved successfully!' });
+      await setDoc(doc(db, 'settings', 'global'), {
+        gemini_api_key: apiKey,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+      
+      setStatus({ type: 'success', message: 'Global API Key saved successfully!' });
       setTimeout(() => setStatus(null), 3000);
     } catch (error) {
-      setStatus({ type: 'error', message: 'Failed to save API Key.' });
+      console.error("Error saving global settings:", error);
+      setStatus({ type: 'error', message: 'Failed to save Global API Key. Make sure you are an admin.' });
+      handleFirestoreError(error, OperationType.WRITE, 'settings/global');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -40,7 +64,7 @@ export default function Settings() {
           <form onSubmit={handleSave} className="card space-y-6">
             <div className="space-y-2">
               <label className="text-xs uppercase tracking-widest text-gray-400 font-sans font-semibold">
-                Gemini API Key
+                Global Gemini API Key
               </label>
               <div className="relative">
                 <input 
@@ -48,12 +72,13 @@ export default function Settings() {
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
                   className="w-full bg-warm-off-white border-none rounded-2xl px-4 py-3 pr-12 font-sans text-sm focus:ring-2 focus:ring-olive-drab/20"
-                  placeholder="Enter your Gemini API key..."
+                  placeholder="Enter the global Gemini API key..."
+                  disabled={loading}
                 />
                 <Key className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300" size={18} />
               </div>
               <p className="text-[10px] text-gray-400 font-sans uppercase tracking-wider mt-2">
-                Get your key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-olive-drab underline">Google AI Studio</a>.
+                This key will be used for all users of the application.
               </p>
             </div>
 
@@ -69,32 +94,22 @@ export default function Settings() {
             <div className="flex gap-4">
               <button 
                 type="submit" 
-                className="olive-button flex-1 flex items-center justify-center gap-2"
+                disabled={loading}
+                className="olive-button flex-1 flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                <Save size={20} />
-                Save Configuration
-              </button>
-              <button 
-                type="button"
-                onClick={() => {
-                  localStorage.removeItem('gemini_api_key');
-                  setApiKey('');
-                  setStatus({ type: 'success', message: 'API Key cleared.' });
-                  setTimeout(() => setStatus(null), 3000);
-                }}
-                className="px-6 py-3 rounded-full border border-gray-200 text-gray-500 hover:bg-gray-50 transition-all font-sans text-sm font-medium"
-              >
-                Clear
+                {loading ? <Loader2 className="animate-spin" size={20} /> : <Save size={20} />}
+                Save Global Configuration
               </button>
             </div>
           </form>
 
           <div className="p-6 bg-gray-50 rounded-[32px] border border-gray-100">
-            <h4 className="text-sm font-semibold font-sans text-gray-700 mb-2">Why do I need an API Key?</h4>
+            <h4 className="text-sm font-semibold font-sans text-gray-700 mb-2">Admin Control</h4>
             <p className="text-xs text-gray-500 font-sans leading-relaxed">
-              DeenAI uses Google's Gemini models to provide intelligent answers and summarize scholarly texts. 
-              By providing your own API key, you ensure that the AI features remain active and responsive. 
-              Your key is stored locally in your browser and is never sent to our servers.
+              As an administrator, you manage the API configuration for the entire platform. 
+              The key you provide here will be used by all users (both guests and logged-in students) 
+              to access AI features. This ensures a consistent experience without requiring 
+              every user to provide their own key.
             </p>
           </div>
         </section>
