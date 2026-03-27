@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { BookOpen, Users, Settings, User, Cog, MessageSquare, History, Menu, X, PlusCircle, Bookmark } from 'lucide-react';
+import { BookOpen, Users, Settings, User, Cog, MessageSquare, History, Menu, X, PlusCircle, Bookmark, LogIn, LogOut, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { auth } from '../lib/firebase';
+import { signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -8,29 +10,58 @@ interface LayoutProps {
   setActiveTab: (tab: string) => void;
   user: any;
   onNewChat: () => void;
+  showLoginPrompt: boolean;
+  setShowLoginPrompt: (show: boolean) => void;
 }
 
-export default function Layout({ children, activeTab, setActiveTab, user, onNewChat }: LayoutProps) {
+export default function Layout({ children, activeTab, setActiveTab, user, onNewChat, showLoginPrompt, setShowLoginPrompt }: LayoutProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
 
   const navItems = [
     { id: 'chat', label: 'AI Chat', icon: MessageSquare },
-    { id: 'history', label: 'History', icon: History },
-    { id: 'notes', label: 'Bookmarks', icon: Bookmark },
+    { id: 'history', label: 'History', icon: History, protected: true },
+    { id: 'notes', label: 'Bookmarks', icon: Bookmark, protected: true },
     { id: 'scholars', label: 'Scholars', icon: Users },
     { id: 'admin', label: 'Admin', icon: Settings, adminOnly: true },
     { id: 'settings', label: 'Settings', icon: Cog },
   ];
 
-  const isAdmin = user?.email === 'imranabdul700@gmail.com' || user?.uid === 'guest-user';
+  const isAdmin = user?.email === 'imranabdul700@gmail.com';
 
   const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
 
   const handleTabClick = (id: string) => {
+    const item = navItems.find(i => i.id === id);
+    if (item?.protected && !user) {
+      setShowLoginPrompt(true);
+      setIsMenuOpen(false);
+      return;
+    }
     setActiveTab(id);
     setIsMenuOpen(false);
     setShowProfile(false);
+  };
+
+  const handleLogin = async () => {
+    const provider = new GoogleAuthProvider();
+    try {
+      await signInWithPopup(auth, provider);
+      setShowLoginPrompt(false);
+    } catch (error) {
+      console.error("Login error:", error);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      setActiveTab('chat');
+      setShowProfile(false);
+      setIsMenuOpen(false);
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
   };
 
   const handleNewChatClick = () => {
@@ -162,12 +193,77 @@ export default function Layout({ children, activeTab, setActiveTab, user, onNewC
                     className="mt-4 p-4 bg-indigo-50 rounded-2xl border border-indigo-100"
                   >
                     <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-1">Email Address</p>
-                    <p className="text-xs font-medium font-sans text-indigo-900 break-all">{user?.email || 'Not logged in'}</p>
+                    <p className="text-xs font-medium font-sans text-indigo-900 break-all mb-4">{user?.email || 'Guest Explorer'}</p>
+                    
+                    {user ? (
+                      <button 
+                        onClick={handleLogout}
+                        className="w-full flex items-center justify-center gap-2 py-2 bg-white text-red-500 border border-red-100 rounded-xl text-xs font-bold hover:bg-red-50 transition-all"
+                      >
+                        <LogOut size={14} />
+                        Logout
+                      </button>
+                    ) : (
+                      <button 
+                        onClick={handleLogin}
+                        className="w-full flex items-center justify-center gap-2 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-all shadow-sm"
+                      >
+                        <LogIn size={14} />
+                        Login with Google
+                      </button>
+                    )}
                   </motion.div>
                 )}
               </div>
             </motion.nav>
           </>
+        )}
+      </AnimatePresence>
+
+      {/* Login Prompt Modal */}
+      <AnimatePresence>
+        {showLoginPrompt && (
+          <div className="fixed inset-0 flex items-center justify-center z-[100] p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowLoginPrompt(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="relative bg-white rounded-[32px] p-8 max-w-md w-full shadow-2xl text-center space-y-6"
+            >
+              <div className="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-600 mx-auto">
+                <AlertCircle size={40} />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-2xl font-bold font-sans text-slate-800">Assalamu Alaikum!</h3>
+                <p className="text-slate-500 font-sans leading-relaxed">
+                  To preserve your learning journey, save bookmarks, and view your history, please sign in. 
+                  This helps us keep your data safe and accessible only to you.
+                </p>
+              </div>
+              <div className="flex flex-col gap-3">
+                <button 
+                  onClick={handleLogin}
+                  className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-sans font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center gap-2"
+                >
+                  <LogIn size={20} />
+                  Login with Google
+                </button>
+                <button 
+                  onClick={() => setShowLoginPrompt(false)}
+                  className="w-full py-4 bg-slate-50 text-slate-500 rounded-2xl font-sans font-medium hover:bg-slate-100 transition-all"
+                >
+                  Continue as Guest
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 

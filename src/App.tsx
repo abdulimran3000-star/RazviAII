@@ -15,19 +15,11 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('chat');
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      if (currentUser) {
-        setUser(currentUser);
-      } else {
-        // Fallback to guest user if not logged in
-        setUser({
-          uid: 'guest-user',
-          email: 'guest@deenai.local',
-          displayName: 'Guest Scholar'
-        });
-      }
+      setUser(currentUser);
       setLoading(false);
     });
 
@@ -51,8 +43,17 @@ export default function App() {
       setActiveTab={setActiveTab} 
       user={user}
       onNewChat={() => setActiveChatId(null)}
+      showLoginPrompt={showLoginPrompt}
+      setShowLoginPrompt={setShowLoginPrompt}
     >
-      {activeTab === 'chat' && <Chat user={user} activeChatId={activeChatId} setActiveChatId={setActiveChatId} />}
+      {activeTab === 'chat' && (
+        <Chat 
+          user={user} 
+          activeChatId={activeChatId} 
+          setActiveChatId={setActiveChatId} 
+          onShowLoginPrompt={() => setShowLoginPrompt(true)}
+        />
+      )}
       {activeTab === 'history' && <History user={user} setActiveChatId={setActiveChatId} setActiveTab={setActiveTab} />}
       {activeTab === 'scholars' && <ScholarDirectory />}
       {activeTab === 'admin' && <AdminPanel />}

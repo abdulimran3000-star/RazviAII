@@ -10,9 +10,10 @@ interface ChatProps {
   user: any;
   activeChatId: string | null;
   setActiveChatId: (id: string | null) => void;
+  onShowLoginPrompt: () => void;
 }
 
-export default function Chat({ user, activeChatId, setActiveChatId }: ChatProps) {
+export default function Chat({ user, activeChatId, setActiveChatId, onShowLoginPrompt }: ChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -21,6 +22,36 @@ export default function Chat({ user, activeChatId, setActiveChatId }: ChatProps)
   const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set());
   const [showModerationWarning, setShowModerationWarning] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+
+  const SUGGESTION_POOL = [
+    'What is Fard-e-Kifaya?',
+    'Biography of Imam Abu Hanifa',
+    'Rules of Zakat',
+    'Importance of Sunnah',
+    'What is the Jannati Sect?',
+    'Life of Imam Ahmed Raza Khan',
+    'Virtues of Durood Shareef',
+    'Method of Ghusl',
+    'Rights of Parents in Islam',
+    'Signs of the Day of Judgment',
+    'History of Karbala',
+    'Miracles of Prophet Muhammad ﷺ',
+    'Importance of Namaz (Salah)',
+    'What is Shirk and Bidat?',
+    'Biography of Ghaus-e-Azam',
+    'Rules of Fasting (Roza)',
+    'Virtues of Friday (Jummah)',
+    'What is Halal and Haram?',
+    'Etiquettes of Eating in Islam',
+    'The 99 Names of Allah'
+  ];
+
+  // Randomize suggestions on mount
+  useEffect(() => {
+    const shuffled = [...SUGGESTION_POOL].sort(() => 0.5 - Math.random());
+    setSuggestions(shuffled.slice(0, 4));
+  }, []);
 
   const RESTRICTED_WORDS = [
     'porn', 'sex', 'fuck', 'shit', 'bitch', 'asshole', 'dick', 'pussy',
@@ -37,7 +68,11 @@ export default function Chat({ user, activeChatId, setActiveChatId }: ChatProps)
   // Fetch messages for active chat
   useEffect(() => {
     if (!activeChatId || !user) {
-      setMessages([]);
+      // If no active chat or no user, we don't clear messages if it's a guest session
+      // unless activeChatId is null (new chat)
+      if (!activeChatId) {
+        setMessages([]);
+      }
       return;
     }
     const path = `chats/${activeChatId}/messages`;
@@ -85,7 +120,11 @@ export default function Chat({ user, activeChatId, setActiveChatId }: ChatProps)
   }, [messages, streamingContent]);
 
   const handleBookmark = async (message: Message) => {
-    if (!user || bookmarkedIds.has(message.id)) return;
+    if (!user) {
+      onShowLoginPrompt();
+      return;
+    }
+    if (bookmarkedIds.has(message.id)) return;
     
     // Find the user message that preceded this assistant message to use as the title
     const msgIndex = messages.findIndex(m => m.id === message.id);
@@ -147,15 +186,15 @@ export default function Chat({ user, activeChatId, setActiveChatId }: ChatProps)
 
     let currentChatId = activeChatId;
 
-    // Create chat if it doesn't exist yet
-    if (!currentChatId) {
+    // Create chat if it doesn't exist yet and user is logged in
+    if (!currentChatId && user) {
       currentChatId = await createNewChat(userMessage);
       if (!currentChatId) {
         setIsLoading(false);
         return;
       }
-    } else {
-      // If chat exists, ensure it's marked as searched
+    } else if (currentChatId && user) {
+      // If chat exists and user is logged in, ensure it's marked as searched
       try {
         const chatRef = doc(db, 'chats', currentChatId);
         const chatDoc = await getDoc(chatRef);
@@ -167,17 +206,31 @@ export default function Chat({ user, activeChatId, setActiveChatId }: ChatProps)
       }
     }
 
-    const messagesPath = `chats/${currentChatId}/messages`;
-
-    try {
-      // 1. Save user message
-      await addDoc(collection(db, 'chats', currentChatId, 'messages'), {
-        chatId: currentChatId,
+    // For guest users, we just add to local state
+    if (!user) {
+      const guestUserMsg: Message = {
+        id: Date.now().toString(),
         role: 'user',
         content: userMessage,
-        createdAt: serverTimestamp(),
-        userId: user.uid,
-      });
+        createdAt: new Date().toISOString(),
+        chatId: 'guest-chat'
+      };
+      setMessages(prev => [...prev, guestUserMsg]);
+    }
+
+    const messagesPath = currentChatId ? `chats/${currentChatId}/messages` : null;
+
+    try {
+      // 1. Save user message if logged in
+      if (user && currentChatId) {
+        await addDoc(collection(db, 'chats', currentChatId, 'messages'), {
+          chatId: currentChatId,
+          role: 'user',
+          content: userMessage,
+          createdAt: serverTimestamp(),
+          userId: user.uid,
+        });
+      }
 
       // 2. Fetch RAG Context (Parallelized for speed)
       let context = "";
@@ -204,14 +257,26 @@ export default function Chat({ user, activeChatId, setActiveChatId }: ChatProps)
         setStreamingContent(fullResponse);
       }
 
-      // 4. Save AI message to Firestore
-      await addDoc(collection(db, 'chats', currentChatId, 'messages'), {
-        chatId: currentChatId,
-        role: 'assistant',
-        content: fullResponse,
-        createdAt: serverTimestamp(),
-        userId: user.uid,
-      });
+      // 4. Save AI message to Firestore if logged in
+      if (user && currentChatId) {
+        await addDoc(collection(db, 'chats', currentChatId, 'messages'), {
+          chatId: currentChatId,
+          role: 'assistant',
+          content: fullResponse,
+          createdAt: serverTimestamp(),
+          userId: user.uid,
+        });
+      } else {
+        // For guest users, add assistant response to local state
+        const guestAssistantMsg: Message = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: fullResponse,
+          createdAt: new Date().toISOString(),
+          chatId: 'guest-chat'
+        };
+        setMessages(prev => [...prev, guestAssistantMsg]);
+      }
       
       setStreamingContent('');
     } catch (err: any) {
@@ -231,7 +296,7 @@ export default function Chat({ user, activeChatId, setActiveChatId }: ChatProps)
         setError(`Something went wrong: ${errorMessage}. Please try again.`);
       }
       
-      if (errorMessage.includes('PERMISSION_DENIED')) {
+      if (errorMessage.includes('PERMISSION_DENIED') && messagesPath) {
         handleFirestoreError(err, OperationType.WRITE, messagesPath);
       }
     } finally {
@@ -253,7 +318,7 @@ export default function Chat({ user, activeChatId, setActiveChatId }: ChatProps)
               <p className="text-slate-500 font-sans max-w-sm mx-auto text-lg leading-relaxed">Ask about Fiqh, Hadith, or the lives of great Scholars.</p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-md w-full">
-              {['What is Fard-e-Kifaya?', 'Biography of Imam Abu Hanifa', 'Rules of Zakat', 'Importance of Sunnah'].map((suggestion) => (
+              {suggestions.map((suggestion) => (
                 <button 
                   key={suggestion}
                   onClick={() => setInput(suggestion)}
