@@ -1,0 +1,9 @@
+{
+  "name": "DeenAI",
+  "description": "Authentic Islamic learning platform focused on Ahl-e-Sunnat teachings with AI-powered scholar knowledge engine and RAG.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}

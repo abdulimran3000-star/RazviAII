@@ -1,0 +1,74 @@
+{
+  "entities": {
+    "scholars": {
+      "title": "Scholar",
+      "description": "Information about Ahl-e-Sunnat scholars.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Full name of the scholar." },
+        "biography": { "type": "string", "description": "Short biography." },
+        "books": { "type": "array", "items": { "type": "string" }, "description": "List of books written by the scholar." },
+        "fatwas": { "type": "array", "items": { "type": "string" }, "description": "Key fatwas issued by the scholar." },
+        "imageUrl": { "type": "string", "description": "Profile picture URL." }
+      },
+      "required": ["name"]
+    },
+    "books": {
+      "title": "Book",
+      "description": "Islamic books and fatwas uploaded for RAG.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "Title of the book." },
+        "authorId": { "type": "string", "description": "Reference to the scholar ID." },
+        "content": { "type": "string", "description": "Extracted text content." },
+        "fileUrl": { "type": "string", "description": "URL to the original PDF in Storage." },
+        "uploadedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "authorId"]
+    },
+    "chats": {
+      "title": "Chat",
+      "description": "User chat sessions.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner of the chat." },
+        "title": { "type": "string", "description": "Title of the chat session." },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId"]
+    },
+    "messages": {
+      "title": "Message",
+      "description": "Individual messages in a chat.",
+      "type": "object",
+      "properties": {
+        "chatId": { "type": "string", "description": "Reference to the chat ID." },
+        "role": { "type": "string", "enum": ["user", "assistant"] },
+        "content": { "type": "string", "description": "Text content of the message." },
+        "references": { "type": "array", "items": { "type": "object", "properties": { "scholar": { "type": "string" }, "source": { "type": "string" } } } },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["chatId", "role", "content"]
+    },
+    "notes": {
+      "title": "Note",
+      "description": "Smart notes generated from AI answers.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner of the note." },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "format": { "type": "string", "enum": ["bullet", "detailed", "summary"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "content"]
+    }
+  },
+  "firestore": {
+    "/scholars/{scholarId}": { "schema": "scholars", "description": "Scholar profiles." },
+    "/books/{bookId}": { "schema": "books", "description": "Uploaded books and fatwas." },
+    "/chats/{chatId}": { "schema": "chats", "description": "User chat sessions." },
+    "/chats/{chatId}/messages/{messageId}": { "schema": "messages", "description": "Messages within a chat." },
+    "/notes/{noteId}": { "schema": "notes", "description": "User notes." }
+  }
+}
